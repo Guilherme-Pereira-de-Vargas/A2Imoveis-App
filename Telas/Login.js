@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
+import { AuthContext } from '../contexts/AuthContext';
 
 import {
   View,
@@ -25,7 +26,7 @@ import { database } from '../firebaseConfig';
 
 
 export default function Login({ navigation }) {
-
+  const { signIn } = useContext(AuthContext);
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -113,6 +114,12 @@ export default function Login({ navigation }) {
       );
 
       const dadosUsuario = snapUsuario.data();
+
+signIn({
+  ...dadosUsuario,
+  uid: usuario.uid,
+  email: usuario.email,
+});
 
       if (dadosUsuario?.tipo === 'admin' || dadosUsuario?.tipo === 'dono') {
 

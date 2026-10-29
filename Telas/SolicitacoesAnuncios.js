@@ -145,7 +145,7 @@ export default function SolicitacoesAnuncios({ navigation }) {
     if (!url) {
 
       Alert.alert(
-        'Arquivo não encontrado',
+               'Arquivo não encontrado',
         'Este documento não foi enviado.'
       );
 

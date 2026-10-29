@@ -1,968 +1,1097 @@
-import { useState } from 'react';
+import React, {
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 
 import {
-View,
-Text,
-StyleSheet,
-TextInput,
-TouchableOpacity,
-ImageBackground,
-ScrollView,
-ActivityIndicator,
+  ActivityIndicator,
+  FlatList,
+  ImageBackground,
+  Keyboard,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { onAuthStateChanged } from 'firebase/auth';
+
 import {
-collection,
-getDocs,
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
 } from 'firebase/firestore';
 
-import { database } from '../firebaseConfig';
+import { auth, database } from '../firebaseConfig';
+import { AuthContext } from '../contexts/AuthContext';
 
-export default function CadastroAdm({ navigation }) {
+const TIPOS = {
+  cliente: {
+    nome: 'Cliente',
+    plural: 'Clientes',
+  },
+  proprietario: {
+    nome: 'Proprietário',
+    plural: 'Proprietários',
+  },
+  corretor: {
+    nome: 'Corretor',
+    plural: 'Corretores',
+  },
+  admin: {
+    nome: 'Administrador',
+    plural: 'Administradores',
+  },
+  dono: {
+    nome: 'Dono',
+    plural: 'Dono',
+  },
+  outro: {
+    nome: 'Outro',
+    plural: 'Outros',
+  },
+};
 
-const [busca, setBusca] = useState('');
-const [buscando, setBuscando] = useState(false);
-const [usuarios, setUsuarios] = useState([]);
-const [pesquisou, setPesquisou] = useState(false);
-
-// =====================================================
-// BUSCAR USUÁRIOS
-// =====================================================
-
-const buscarUsuarios = async () => {
-
-if (!busca.trim()) {
-
-  setUsuarios([]);
-  setPesquisou(false);
-
-  return;
+function normalizar(valor) {
+  return String(valor ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 }
 
-
-try {
-
-  setBuscando(true);
-  setPesquisou(true);
-
-
-  const usuariosRef =
-    collection(database, 'usuarios');
-
-
-  const snap =
-    await getDocs(usuariosRef);
-
-
-  const textoBusca =
-    busca.trim().toLowerCase();
-
-
-  const lista = [];
-
-
-  snap.forEach((documento) => {
-
-    const dados =
-      documento.data();
-
-
-    const nome =
-      String(dados.nome || '')
-        .toLowerCase();
-
-
-    const email =
-      String(dados.email || '')
-        .toLowerCase();
-
-
-    const telefone =
-      String(dados.telefone || '')
-        .toLowerCase();
-
-
-    const correspondeNome =
-      nome.includes(textoBusca);
-
-
-    const correspondeEmail =
-      email.includes(textoBusca);
-
-
-    const correspondeTelefone =
-      telefone.includes(textoBusca);
-
-
-    if (
-      correspondeNome ||
-      correspondeEmail ||
-      correspondeTelefone
-    ) {
-
-      lista.push({
-        id: documento.id,
-        ...dados,
-      });
-
-    }
-
-  });
-
-
-  // Ordena por nome
-  lista.sort((a, b) => {
-
-    const nomeA =
-      String(a.nome || '').toLowerCase();
-
-    const nomeB =
-      String(b.nome || '').toLowerCase();
-
-
-    return nomeA.localeCompare(nomeB);
-
-  });
-
-
-  setUsuarios(lista);
-
-
-} catch (erro) {
-
-  console.log(
-    'ERRO AO BUSCAR USUÁRIOS:',
-    erro
-  );
-
-} finally {
-
-  setBuscando(false);
-
-}
-
-};
-
-// =====================================================
-// LIMPAR PESQUISA
-// =====================================================
-
-const limparBusca = () => {
-
-setBusca('');
-setUsuarios([]);
-setPesquisou(false);
-
-};
-
-// =====================================================
-// ABRIR USUÁRIO
-// =====================================================
-
-const abrirUsuario = (usuario) => {
-
-navigation.navigate(
-  'DetalhesUsuario',
-  {
-    usuarioId: usuario.id,
-    dados: usuario,
-  }
-);
-
-};
-
-// =====================================================
-// TIPO DO USUÁRIO
-// =====================================================
-
-const mostrarTipoUsuario = (usuario) => {
-
-const tipo =
-  String(
+function tipoUsuario(usuario) {
+  const tipo = normalizar(
     usuario.tipo ||
     usuario.role ||
     usuario.perfil ||
-    ''
-  ).toLowerCase();
+    'cliente'
+  );
 
+  if (tipo === 'administrador') {
+    return 'admin';
+  }
 
-if (
-  tipo === 'proprietario' ||
-  tipo === 'proprietário'
-) {
-
-  return 'PROPRIETÁRIO';
-
+  return Object.prototype.hasOwnProperty.call(TIPOS, tipo)
+    ? tipo
+    : 'outro';
 }
 
+function iniciais(nome) {
+  const partes = String(nome || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
 
-if (tipo === 'corretor') {
+  if (!partes.length) {
+    return '?';
+  }
 
-  return 'CORRETOR';
-
+  return (
+    partes[0].charAt(0) +
+    (
+      partes.length > 1
+        ? partes[partes.length - 1].charAt(0)
+        : ''
+    )
+  ).toUpperCase();
 }
 
+function filtrarUsuarios(usuarios, busca, filtro, ordem) {
+  const texto = normalizar(busca);
+  const termos = texto.split(/\s+/).filter(Boolean);
 
-if (tipo === 'admin' ||
-    tipo === 'administrador') {
+  const somenteTelefone = /^[\d\s()+.\-]+$/.test(
+    String(busca).trim()
+  );
 
-  return 'ADMINISTRADOR';
+  const digitos = String(busca).replace(/\D/g, '');
 
-}
+  const telefoneBusca = /^55\d{10,11}$/.test(digitos)
+    ? digitos.slice(2)
+    : digitos;
 
-
-return 'CLIENTE';
-
-};
-
-// =====================================================
-// TELA
-// =====================================================
-
-return (
-
-<ImageBackground
-  source={require('../Imagens/fundo-cadastro.png')}
-  style={estilos.fundo}
-  resizeMode="cover"
->
-
-  <View style={estilos.overlay} />
-
-
-  <ScrollView
-    style={estilos.scroll}
-    contentContainerStyle={estilos.conteudo}
-    keyboardShouldPersistTaps="handled"
-    showsVerticalScrollIndicator={false}
-  >
-
-
-    {/* =================================================
-        VOLTAR
-    ================================================= */}
-
-    <TouchableOpacity
-      style={estilos.botaoVoltar}
-      onPress={() =>
-        navigation.goBack()
+  return usuarios
+    .filter((usuario) => {
+      if (
+        filtro !== 'todos' &&
+        tipoUsuario(usuario) !== filtro
+      ) {
+        return false;
       }
-    >
 
-      <Text style={estilos.iconeVoltar}>
-        ‹
-      </Text>
+      const conteudo = normalizar(
+        `${usuario.nome || ''} ` +
+        `${usuario.email || ''} ` +
+        `${usuario.telefone || ''}`
+      );
 
-    </TouchableOpacity>
+      const correspondeTexto = termos.every(
+        (termo) => conteudo.includes(termo)
+      );
 
+      const correspondeTelefone =
+        somenteTelefone &&
+        telefoneBusca.length > 0 &&
+        String(usuario.telefone || '')
+          .replace(/\D/g, '')
+          .includes(telefoneBusca);
 
-    {/* =================================================
-        CABEÇALHO
-    ================================================= */}
+      return correspondeTexto || correspondeTelefone;
+    })
+    .sort((a, b) => {
+      const comparacao = normalizar(a.nome).localeCompare(
+        normalizar(b.nome),
+        'pt-BR'
+      );
 
-    <View style={estilos.cabecalho}>
+      return ordem === 'za'
+        ? -comparacao
+        : comparacao;
+    });
+}
 
-      <Text style={estilos.icone}>
-        👤
-      </Text>
+function textoErro(erro) {
+  return String(erro?.code).includes('permission-denied')
+    ? 'Sua conta não tem permissão para consultar os usuários.'
+    : 'Não foi possível carregar a lista. Verifique sua conexão e tente novamente.';
+}
 
-
-      <Text style={estilos.titulo}>
-        PESQUISAR
-        <Text style={estilos.tituloClaro}>
-          {' '}USUÁRIOS
-        </Text>
-      </Text>
-
-
-      <Text style={estilos.subtituloMarca}>
-        A2 IMÓVEIS
-      </Text>
-
-
-      <Text style={estilos.textoExplicacao}>
-        Encontre clientes, proprietários e corretores
-        cadastrados no sistema.
-      </Text>
-
-    </View>
-
-
-    {/* =================================================
-        PESQUISA
-    ================================================= */}
-
-    <View style={estilos.cardBusca}>
-
-      <Text style={estilos.rotulo}>
-        PESQUISAR USUÁRIO
-      </Text>
-
-
-      <View style={estilos.containerInput}>
-
-        <Text style={estilos.iconeBusca}>
-          🔍
-        </Text>
-
-
-        <TextInput
-          style={estilos.input}
-          placeholder="Nome, e-mail ou telefone"
-          placeholderTextColor="#777"
-          value={busca}
-          onChangeText={setBusca}
-          autoCapitalize="none"
-          onSubmitEditing={buscarUsuarios}
-          returnKeyType="search"
-        />
-
-
-        {busca.length > 0 && (
-
-          <TouchableOpacity
-            style={estilos.botaoLimpar}
-            onPress={limparBusca}
-          >
-
-            <Text style={estilos.textoLimpar}>
-              ×
-            </Text>
-
-          </TouchableOpacity>
-
-        )}
-
-      </View>
-
-
-      <Text style={estilos.dica}>
-        Você pode pesquisar apenas uma parte do nome,
-        e-mail ou telefone.
-      </Text>
-
-
-      <TouchableOpacity
-        style={[
-          estilos.botaoBuscar,
-          buscando &&
-          estilos.botaoDesabilitado,
-        ]}
-        onPress={buscarUsuarios}
-        disabled={buscando}
-      >
-
-        {buscando ? (
-
-          <View style={estilos.carregando}>
-
-            <ActivityIndicator
-              color="#111"
-              size="small"
-            />
-
-            <Text style={estilos.textoBotao}>
-              BUSCANDO...
-            </Text>
-
-          </View>
-
-        ) : (
-
-          <Text style={estilos.textoBotao}>
-            BUSCAR USUÁRIO
-          </Text>
-
-        )}
-
-      </TouchableOpacity>
-
-    </View>
-
-
-    {/* =================================================
-        RESULTADOS
-    ================================================= */}
-
-    {buscando && (
-
-      <View style={estilos.estado}>
-
+function Estado({
+  titulo,
+  texto,
+  carregando = false,
+  acao,
+  onPress,
+}) {
+  return (
+    <View style={s.estado}>
+      {carregando && (
         <ActivityIndicator
           size="large"
           color="#C9A86A"
         />
-
-        <Text style={estilos.textoEstado}>
-          Procurando usuários...
-        </Text>
-
-      </View>
-
-    )}
-
-
-    {!buscando &&
-      pesquisou &&
-      usuarios.length > 0 && (
-
-        <View style={estilos.resultados}>
-
-          <View style={estilos.cabecalhoResultados}>
-
-            <View>
-
-              <Text style={estilos.tituloResultados}>
-                Usuários encontrados
-              </Text>
-
-              <Text style={estilos.subtituloResultados}>
-                Toque em um usuário para ver os detalhes.
-              </Text>
-
-            </View>
-
-
-            <View style={estilos.contador}>
-
-              <Text style={estilos.textoContador}>
-                {usuarios.length}
-              </Text>
-
-            </View>
-
-          </View>
-
-
-          {usuarios.map((usuario) => (
-
-            <TouchableOpacity
-              key={usuario.id}
-              style={estilos.cardUsuario}
-              activeOpacity={0.8}
-              onPress={() =>
-                abrirUsuario(usuario)
-              }
-            >
-
-              {/* AVATAR */}
-
-              <View style={estilos.avatar}>
-
-                <Text style={estilos.textoAvatar}>
-                  {String(
-                    usuario.nome ||
-                    '?'
-                  )
-                    .charAt(0)
-                    .toUpperCase()}
-                </Text>
-
-              </View>
-
-
-              {/* INFORMAÇÕES */}
-
-              <View style={estilos.informacoesUsuario}>
-
-                <Text
-                  style={estilos.nomeUsuario}
-                  numberOfLines={1}
-                >
-                  {usuario.nome ||
-                    'Nome não informado'}
-                </Text>
-
-
-                <Text
-                  style={estilos.emailUsuario}
-                  numberOfLines={1}
-                >
-                  {usuario.email ||
-                    'E-mail não informado'}
-                </Text>
-
-
-                {usuario.telefone && (
-
-                  <Text
-                    style={estilos.telefoneUsuario}
-                    numberOfLines={1}
-                  >
-                    📱 {usuario.telefone}
-                  </Text>
-
-                )}
-
-
-                <View style={estilos.linhaTipo}>
-
-                  <Text style={estilos.tipoUsuario}>
-                    {mostrarTipoUsuario(usuario)}
-                  </Text>
-
-                </View>
-
-              </View>
-
-
-              {/* SETA */}
-
-              <Text style={estilos.seta}>
-                ›
-              </Text>
-
-            </TouchableOpacity>
-
-          ))}
-
-        </View>
-
       )}
 
+      <Text style={s.tituloEstado}>
+        {titulo}
+      </Text>
 
-    {/* =================================================
-        NENHUM RESULTADO
-    ================================================= */}
-
-    {!buscando &&
-      pesquisou &&
-      usuarios.length === 0 && (
-
-        <View style={estilos.semResultado}>
-
-          <Text style={estilos.iconeSemResultado}>
-            🔎
-          </Text>
-
-
-          <Text style={estilos.tituloSemResultado}>
-            Nenhum usuário encontrado
-          </Text>
-
-
-          <Text style={estilos.textoSemResultado}>
-            Não encontramos nenhum usuário
-            com esse nome, e-mail ou telefone.
-          </Text>
-
-        </View>
-
+      {!!texto && (
+        <Text style={s.textoEstado}>
+          {texto}
+        </Text>
       )}
 
-
-    {/* =================================================
-        TEXTO INICIAL
-    ================================================= */}
-
-    {!pesquisou && (
-
-      <View style={estilos.estadoInicial}>
-
-        <Text style={estilos.iconeInicial}>
-          👥
-        </Text>
-
-
-        <Text style={estilos.tituloInicial}>
-          Pesquise um usuário
-        </Text>
-
-
-        <Text style={estilos.textoInicial}>
-          Digite o nome, e-mail ou telefone
-          para encontrar usuários cadastrados.
-        </Text>
-
-      </View>
-
-    )}
-
-
-  </ScrollView>
-
-</ImageBackground>
-
-);
-
+      {!!acao && (
+        <TouchableOpacity
+          style={s.botaoPrincipal}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          onPress={onPress}
+        >
+          <Text style={s.textoBotao}>
+            {acao}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 }
 
-/* =====================================================
-ESTILOS
-===================================================== */
+export default function CadastroAdm({ navigation }) {
+  const { isGuest } = useContext(AuthContext);
 
-const estilos = StyleSheet.create({
+  const [usuarios, setUsuarios] = useState([]);
+  const [busca, setBusca] = useState('');
+  const [filtro, setFiltro] = useState('todos');
+  const [ordem, setOrdem] = useState('az');
 
-fundo: {
-flex: 1,
-backgroundColor: '#111',
-},
+  const [carregando, setCarregando] = useState(true);
+  const [verificando, setVerificando] = useState(true);
+  const [autorizado, setAutorizado] = useState(false);
 
-overlay: {
-...StyleSheet.absoluteFillObject,
-backgroundColor: 'rgba(0, 0, 0, 0.60)',
-},
+  const [usuarioAtual, setUsuarioAtual] = useState(null);
+  const [erro, setErro] = useState('');
+  const [tentativa, setTentativa] = useState(0);
 
-scroll: {
-flex: 1,
-},
+  useEffect(() => {
+    let ativo = true;
+    let versao = 0;
+    let pararLista = () => {};
 
-conteudo: {
-padding: 22,
-paddingTop: 55,
-paddingBottom: 60,
-},
+    const pararAuth = onAuthStateChanged(
+      auth,
+      async (usuario) => {
+        const atual = ++versao;
 
-/* =================================================
-VOLTAR
-================================================= */
+        pararLista();
+        pararLista = () => {};
 
-botaoVoltar: {
-position: 'absolute',
-top: 50,
-left: 20,
-width: 46,
-height: 46,
-borderRadius: 23,
-backgroundColor: 'rgba(10,10,10,0.80)',
-borderWidth: 1,
-borderColor: 'rgba(201,168,106,0.35)',
-justifyContent: 'center',
-alignItems: 'center',
-zIndex: 10,
-},
+        setUsuarios([]);
+        setErro('');
+        setAutorizado(false);
+        setUsuarioAtual(usuario);
 
-iconeVoltar: {
-color: '#C9A86A',
-fontSize: 38,
-lineHeight: 40,
-marginTop: -5,
-},
+        if (!usuario || isGuest) {
+          setVerificando(false);
+          setCarregando(false);
+          return;
+        }
 
-/* =================================================
-CABEÇALHO
-================================================= */
+        setVerificando(true);
+        setCarregando(true);
 
-cabecalho: {
-alignItems: 'center',
-marginBottom: 25,
-marginTop: 15,
-},
+        try {
+          const perfil = await getDoc(
+            doc(database, 'usuarios', usuario.uid)
+          );
 
-icone: {
-fontSize: 40,
-marginBottom: 8,
-},
+          if (!ativo || atual !== versao) {
+            return;
+          }
 
-titulo: {
-color: '#C9A86A',
-fontSize: 27,
-fontWeight: 'bold',
-letterSpacing: 2,
-textAlign: 'center',
-},
+          const permitido = ['admin', 'dono'].includes(
+            perfil.data()?.tipo
+          );
 
-tituloClaro: {
-color: '#fff',
-},
+          setAutorizado(permitido);
+          setVerificando(false);
 
-subtituloMarca: {
-color: '#C9A86A',
-fontSize: 10,
-fontWeight: 'bold',
-letterSpacing: 4,
-marginTop: 5,
-},
+          if (!permitido) {
+            setCarregando(false);
+            return;
+          }
 
-textoExplicacao: {
-color: '#888',
-fontSize: 12,
-textAlign: 'center',
-lineHeight: 18,
-marginTop: 13,
-maxWidth: 320,
-},
+          pararLista = onSnapshot(
+            collection(database, 'usuarios'),
 
-/* =================================================
-CARD BUSCA
-================================================= */
+            (snapshot) => {
+              if (!ativo || atual !== versao) {
+                return;
+              }
 
-cardBusca: {
-width: '100%',
-backgroundColor: 'rgba(15,15,15,0.94)',
-borderRadius: 18,
-padding: 18,
-borderWidth: 1,
-borderColor: 'rgba(201,168,106,0.25)',
-marginBottom: 20,
-},
+              setUsuarios(
+                snapshot.docs.map((documento) => ({
+                  ...documento.data(),
+                  id: documento.id,
+                }))
+              );
 
-rotulo: {
-color: '#C9A86A',
-fontSize: 11,
-fontWeight: 'bold',
-letterSpacing: 1.5,
-marginBottom: 9,
-},
+              setErro('');
+              setCarregando(false);
+            },
 
-containerInput: {
-height: 54,
-backgroundColor: '#0b0b0b',
-borderWidth: 1,
-borderColor: '#333',
-borderRadius: 12,
-flexDirection: 'row',
-alignItems: 'center',
-paddingHorizontal: 13,
-},
+            (falha) => {
+              if (!ativo || atual !== versao) {
+                return;
+              }
 
-iconeBusca: {
-fontSize: 17,
-marginRight: 9,
-},
+              setUsuarios([]);
+              setErro(textoErro(falha));
+              setCarregando(false);
+            }
+          );
+        } catch (falha) {
+          if (!ativo || atual !== versao) {
+            return;
+          }
 
-input: {
-flex: 1,
-height: '100%',
-color: '#fff',
-fontSize: 14,
-},
+          setErro(textoErro(falha));
+          setVerificando(false);
+          setCarregando(false);
+        }
+      }
+    );
 
-botaoLimpar: {
-width: 28,
-height: 28,
-borderRadius: 14,
-backgroundColor: '#292929',
-justifyContent: 'center',
-alignItems: 'center',
-},
+    return () => {
+      ativo = false;
+      versao++;
+      pararLista();
+      pararAuth();
+    };
+  }, [isGuest, tentativa]);
 
-textoLimpar: {
-color: '#aaa',
-fontSize: 20,
-lineHeight: 22,
-},
+  const contagem = useMemo(() => {
+    const resultado = {
+      todos: usuarios.length,
+    };
 
-dica: {
-color: '#666',
-fontSize: 10,
-marginTop: 8,
-lineHeight: 15,
-},
+    Object.keys(TIPOS).forEach((tipo) => {
+      resultado[tipo] = 0;
+    });
 
-botaoBuscar: {
-height: 48,
-borderRadius: 25,
-backgroundColor: '#C9A86A',
-alignItems: 'center',
-justifyContent: 'center',
-marginTop: 15,
-},
+    usuarios.forEach((usuario) => {
+      resultado[tipoUsuario(usuario)]++;
+    });
 
-botaoDesabilitado: {
-opacity: 0.6,
-},
+    return resultado;
+  }, [usuarios]);
 
-carregando: {
-flexDirection: 'row',
-alignItems: 'center',
-},
+  const resultados = useMemo(
+    () => filtrarUsuarios(usuarios, busca, filtro, ordem),
+    [usuarios, busca, filtro, ordem]
+  );
 
-textoBotao: {
-color: '#111',
-fontSize: 12,
-fontWeight: '900',
-letterSpacing: 1,
-marginLeft: 9,
-},
+  const filtros = [
+    'todos',
+    'cliente',
+    'proprietario',
+    'corretor',
+    'admin',
+    'dono',
+  ];
 
-/* =================================================
-RESULTADOS
-================================================= */
+  if (contagem.outro > 0) {
+    filtros.push('outro');
+  }
 
-resultados: {
-width: '100%',
-},
+  function limparFiltros() {
+    setBusca('');
+    setFiltro('todos');
+    Keyboard.dismiss();
+  }
 
-cabecalhoResultados: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-marginBottom: 12,
-},
+  function abrirUsuario(usuario) {
+    Keyboard.dismiss();
 
-tituloResultados: {
-color: '#fff',
-fontSize: 18,
-fontWeight: '700',
-},
+    navigation.navigate('DetalhesUsuario', {
+      usuarioId: usuario.id,
+      dados: usuario,
+    });
+  }
 
-subtituloResultados: {
-color: '#777',
-fontSize: 10,
-marginTop: 4,
-},
+  const cabecalho = (
+    <View>
+      <Text style={s.sobretitulo}>
+        GESTÃO DE USUÁRIOS
+      </Text>
 
-contador: {
-minWidth: 34,
-height: 34,
-paddingHorizontal: 8,
-borderRadius: 17,
-backgroundColor: 'rgba(201,168,106,0.15)',
-borderWidth: 1,
-borderColor: 'rgba(201,168,106,0.3)',
-justifyContent: 'center',
-alignItems: 'center',
-},
+      <Text style={s.titulo}>
+        Consultar usuários
+      </Text>
 
-textoContador: {
-color: '#C9A86A',
-fontSize: 13,
-fontWeight: '800',
-},
+      <Text style={s.descricao}>
+        Encontre cadastros e abra os detalhes para
+        gerenciar cada usuário.
+      </Text>
 
-/* =================================================
-CARD USUÁRIO
-================================================= */
+      <View style={s.resumo}>
+        {[
+          ['todos', 'Total'],
+          ['cliente', 'Clientes'],
+          ['proprietario', 'Proprietários'],
+        ].map(([tipo, nome]) => (
+          <View key={tipo} style={s.cardResumo}>
+            <Text style={s.numeroResumo}>
+              {carregando || erro ? '—' : contagem[tipo]}
+            </Text>
 
-cardUsuario: {
-width: '100%',
-backgroundColor: 'rgba(18,18,18,0.95)',
-borderRadius: 16,
-borderWidth: 1,
-borderColor: 'rgba(201,168,106,0.16)',
-padding: 15,
-marginBottom: 10,
-flexDirection: 'row',
-alignItems: 'center',
-},
+            <Text style={s.labelResumo}>
+              {nome}
+            </Text>
+          </View>
+        ))}
+      </View>
 
-avatar: {
-width: 52,
-height: 52,
-borderRadius: 26,
-backgroundColor: 'rgba(201,168,106,0.16)',
-borderWidth: 1,
-borderColor: 'rgba(201,168,106,0.35)',
-alignItems: 'center',
-justifyContent: 'center',
-},
+      <View style={s.cardBusca}>
+        <Text style={s.label}>
+          BUSCAR USUÁRIO
+        </Text>
 
-textoAvatar: {
-color: '#C9A86A',
-fontSize: 21,
-fontWeight: '800',
-},
+        <View style={s.linhaBusca}>
+          <Text style={s.iconeBusca}>⌕</Text>
 
-informacoesUsuario: {
-flex: 1,
-marginLeft: 13,
-},
+          <TextInput
+            style={s.input}
+            value={busca}
+            onChangeText={setBusca}
+            accessibilityLabel="Buscar por nome, e-mail ou telefone"
+            placeholder="Nome, e-mail ou telefone"
+            placeholderTextColor="#777"
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            onSubmitEditing={Keyboard.dismiss}
+          />
 
-nomeUsuario: {
-color: '#fff',
-fontSize: 15,
-fontWeight: '700',
-},
+          {!!busca && (
+            <TouchableOpacity
+              style={s.limparBusca}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Limpar busca"
+              onPress={() => setBusca('')}
+            >
+              <Text style={s.iconeLimpar}>×</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
-emailUsuario: {
-color: '#999',
-fontSize: 11,
-marginTop: 4,
-},
+        <Text style={s.dica}>
+          Os resultados mudam enquanto você digita.
+        </Text>
 
-telefoneUsuario: {
-color: '#777',
-fontSize: 10,
-marginTop: 4,
-},
+        <Text style={[s.label, s.labelFiltro]}>
+          TIPO DE USUÁRIO
+        </Text>
 
-linhaTipo: {
-flexDirection: 'row',
-marginTop: 7,
-},
+        <View style={s.filtros}>
+          {filtros.map((tipo) => (
+            <TouchableOpacity
+              key={tipo}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={
+                tipo === 'todos'
+                  ? 'Todos'
+                  : TIPOS[tipo].plural
+              }
+              accessibilityState={{
+                selected: filtro === tipo,
+              }}
+              onPress={() => setFiltro(tipo)}
+              style={[
+                s.filtro,
+                filtro === tipo && s.filtroAtivo,
+              ]}
+            >
+              <Text
+                style={[
+                  s.textoFiltro,
+                  filtro === tipo && s.textoFiltroAtivo,
+                ]}
+              >
+                {tipo === 'todos'
+                  ? 'Todos'
+                  : TIPOS[tipo].plural}
+              </Text>
 
-tipoUsuario: {
-color: '#C9A86A',
-fontSize: 9,
-fontWeight: '800',
-letterSpacing: 1,
-},
+              <Text
+                style={[
+                  s.numeroFiltro,
+                  filtro === tipo && s.textoFiltroAtivo,
+                ]}
+              >
+                {contagem[tipo]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
 
-seta: {
-color: '#C9A86A',
-fontSize: 29,
-marginLeft: 7,
-},
+      <View style={s.barraResultados}>
+        <View style={s.resumoResultados}>
+          <Text style={s.tituloResultados}>
+            {filtro === 'todos'
+              ? 'Todos os usuários'
+              : TIPOS[filtro].plural}
+          </Text>
 
-/* =================================================
-ESTADOS
-================================================= */
+          <Text style={s.descricaoResultados}>
+            {carregando
+              ? 'Atualizando lista...'
+              : erro
+                ? 'Consulta indisponível'
+                : `${resultados.length} ${
+                    resultados.length === 1
+                      ? 'cadastro encontrado'
+                      : 'cadastros encontrados'
+                  }`}
+          </Text>
+        </View>
 
-estado: {
-alignItems: 'center',
-paddingVertical: 35,
-},
+        <TouchableOpacity
+          style={s.botaoOrdenar}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Inverter ordem alfabética"
+          onPress={() =>
+            setOrdem((valor) =>
+              valor === 'az' ? 'za' : 'az'
+            )
+          }
+        >
+          <Text style={s.textoOrdenar}>
+            Nome {ordem === 'az' ? 'A–Z' : 'Z–A'}
+          </Text>
+        </TouchableOpacity>
 
-textoEstado: {
-color: '#777',
-fontSize: 12,
-marginTop: 10,
-},
+        <TouchableOpacity
+          style={s.botaoAtualizar}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Atualizar usuários"
+          accessibilityState={{
+            disabled: carregando,
+          }}
+          disabled={carregando}
+          onPress={() =>
+            setTentativa((valor) => valor + 1)
+          }
+        >
+          <Text style={s.iconeAtualizar}>↻</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
-semResultado: {
-backgroundColor: 'rgba(18,18,18,0.9)',
-borderRadius: 18,
-borderWidth: 1,
-borderColor: '#292929',
-alignItems: 'center',
-padding: 30,
-marginTop: 5,
-},
+  const vazio = carregando ? (
+    <Estado
+      titulo="Carregando usuários..."
+      carregando
+    />
+  ) : erro ? (
+    <Estado
+      titulo="Não foi possível carregar"
+      texto={erro}
+      acao="Tentar novamente"
+      onPress={() =>
+        setTentativa((valor) => valor + 1)
+      }
+    />
+  ) : (
+    <Estado
+      titulo={
+        busca || filtro !== 'todos'
+          ? 'Nenhum resultado encontrado'
+          : 'Nenhum usuário cadastrado'
+      }
+      texto={
+        busca || filtro !== 'todos'
+          ? 'Tente outro termo ou selecione outro tipo de usuário.'
+          : 'Os cadastros aparecerão aqui assim que forem criados.'
+      }
+      acao={
+        busca || filtro !== 'todos'
+          ? 'Limpar filtros'
+          : undefined
+      }
+      onPress={limparFiltros}
+    />
+  );
 
-iconeSemResultado: {
-fontSize: 35,
-marginBottom: 10,
-},
+  return (
+    <ImageBackground
+      source={require('../Imagens/fundo-cadastro.png')}
+      style={s.fundo}
+    >
+      <View style={s.sombra} />
 
-tituloSemResultado: {
-color: '#fff',
-fontSize: 16,
-fontWeight: '700',
-},
+      <SafeAreaView style={s.areaSegura}>
+        <View style={s.topo}>
+          <TouchableOpacity
+            style={s.botaoVoltar}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar"
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={s.setaVoltar}>‹</Text>
+          </TouchableOpacity>
 
-textoSemResultado: {
-color: '#777',
-fontSize: 11,
-textAlign: 'center',
-lineHeight: 17,
-marginTop: 7,
-},
+          <View style={s.marca}>
+            <Text style={s.logo}>
+              A2 <Text style={s.logoBranco}>IMÓVEIS</Text>
+            </Text>
 
-estadoInicial: {
-alignItems: 'center',
-paddingVertical: 35,
-paddingHorizontal: 20,
-},
+            <Text style={s.slogan}>
+              REALIZANDO SONHOS
+            </Text>
+          </View>
 
-iconeInicial: {
-fontSize: 38,
-marginBottom: 10,
-},
+          <View style={s.espacoTopo} />
+        </View>
 
-tituloInicial: {
-color: '#fff',
-fontSize: 16,
-fontWeight: '700',
-},
+        {verificando ? (
+          <View style={s.areaCentral}>
+            <Estado
+              titulo="Verificando acesso..."
+              carregando
+            />
+          </View>
+        ) : !autorizado ? (
+          <View style={s.conteudo}>
+            <Estado
+              titulo={
+                erro
+                  ? 'Não foi possível abrir a consulta'
+                  : 'Acesso restrito'
+              }
+              texto={
+                erro ||
+                'A consulta de usuários é exclusiva do administrador e do dono.'
+              }
+              acao={
+                erro ? 'Tentar novamente' : undefined
+              }
+              onPress={() =>
+                setTentativa((valor) => valor + 1)
+              }
+            />
+          </View>
+        ) : (
+          <FlatList
+            style={s.lista}
+            data={resultados}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={s.conteudo}
+            ListHeaderComponent={cabecalho}
+            ListEmptyComponent={vazio}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={10}
+            windowSize={7}
+            renderItem={({ item }) => {
+              const tipo = tipoUsuario(item);
 
-textoInicial: {
-color: '#777',
-fontSize: 11,
-lineHeight: 17,
-textAlign: 'center',
-marginTop: 7,
-maxWidth: 300,
-},
+              return (
+                <TouchableOpacity
+                  style={s.cardUsuario}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    `Consultar ${item.nome || 'usuário'}, ` +
+                    TIPOS[tipo].nome
+                  }
+                  onPress={() => abrirUsuario(item)}
+                >
+                  <View style={s.avatar}>
+                    <Text style={s.iniciais}>
+                      {iniciais(item.nome)}
+                    </Text>
+                  </View>
 
+                  <View style={s.dadosUsuario}>
+                    <Text
+                      style={s.nomeUsuario}
+                      numberOfLines={1}
+                    >
+                      {String(
+                        item.nome || 'Nome não informado'
+                      )}
+                    </Text>
+
+                    <View style={s.linhaTipo}>
+                      <View style={s.badge}>
+                        <Text style={s.textoBadge}>
+                          {TIPOS[tipo].nome}
+                        </Text>
+                      </View>
+
+                      {item.id === usuarioAtual?.uid && (
+                        <Text style={s.suaConta}>
+                          Sua conta
+                        </Text>
+                      )}
+                    </View>
+
+                    <Text
+                      style={s.email}
+                      numberOfLines={1}
+                    >
+                      {String(
+                        item.email || 'E-mail não informado'
+                      )}
+                    </Text>
+
+                    {!!item.telefone && (
+                      <Text style={s.telefone}>
+                        {String(item.telefone)}
+                      </Text>
+                    )}
+                  </View>
+
+                  <Text style={s.seta}>›</Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        )}
+      </SafeAreaView>
+    </ImageBackground>
+  );
+}
+
+const s = StyleSheet.create({
+  fundo: {
+    flex: 1,
+    backgroundColor: '#111',
+  },
+  areaSegura: {
+    flex: 1,
+  },
+  sombra: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+  },
+  topo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 22,
+    paddingTop: 12,
+    paddingBottom: 22,
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+  },
+  botaoVoltar: {
+    width: 44,
+    height: 44,
+    borderRadius: 23,
+    backgroundColor: 'rgba(20,20,20,0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,106,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  setaVoltar: {
+    color: '#C9A86A',
+    fontSize: 32,
+    lineHeight: 34,
+    marginTop: -3,
+  },
+  marca: {
+    alignItems: 'center',
+  },
+  logo: {
+    color: '#C9A86A',
+    fontSize: 21,
+    fontWeight: '900',
+    letterSpacing: 3,
+  },
+  logoBranco: {
+    color: '#fff',
+  },
+  slogan: {
+    color: '#C9A86A',
+    fontSize: 7,
+    fontWeight: 'bold',
+    letterSpacing: 2.5,
+    marginTop: 3,
+  },
+  espacoTopo: {
+    width: 44,
+  },
+  lista: {
+    flex: 1,
+  },
+  conteudo: {
+    paddingHorizontal: 22,
+    paddingBottom: 40,
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+    flexGrow: 1,
+  },
+  sobretitulo: {
+    color: '#C9A86A',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  titulo: {
+    color: '#fff',
+    fontSize: 29,
+    fontWeight: '700',
+  },
+  descricao: {
+    color: '#aaa',
+    fontSize: 13,
+    lineHeight: 21,
+    marginTop: 9,
+  },
+  resumo: {
+    flexDirection: 'row',
+    gap: 9,
+    marginVertical: 20,
+  },
+  cardResumo: {
+    flex: 1,
+    backgroundColor: 'rgba(18,18,18,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,106,0.18)',
+    borderRadius: 15,
+    paddingVertical: 15,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+  },
+  numeroResumo: {
+    color: '#C9A86A',
+    fontSize: 25,
+    fontWeight: '800',
+  },
+  labelResumo: {
+    color: '#aaa',
+    fontSize: 10,
+    marginTop: 5,
+  },
+  cardBusca: {
+    backgroundColor: 'rgba(18,18,18,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,106,0.18)',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 20,
+  },
+  label: {
+    color: '#C9A86A',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 9,
+  },
+  linhaBusca: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#161616',
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,106,0.18)',
+    paddingHorizontal: 12,
+  },
+  iconeBusca: {
+    color: '#C9A86A',
+    fontSize: 25,
+    marginRight: 9,
+  },
+  input: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 50,
+    color: '#fff',
+    fontSize: 13,
+    paddingVertical: 10,
+  },
+  limparBusca: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#292929',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+  iconeLimpar: {
+    color: '#aaa',
+    fontSize: 22,
+    lineHeight: 25,
+  },
+  dica: {
+    color: '#888',
+    fontSize: 10,
+    lineHeight: 16,
+    marginTop: 8,
+  },
+  labelFiltro: {
+    marginTop: 18,
+  },
+  filtros: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  filtro: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,106,0.18)',
+    backgroundColor: '#181818',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  filtroAtivo: {
+    backgroundColor: '#C9A86A',
+    borderColor: '#C9A86A',
+  },
+  textoFiltro: {
+    color: '#C9A86A',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  numeroFiltro: {
+    color: '#C9A86A',
+    fontSize: 10,
+    fontWeight: '800',
+    marginLeft: 7,
+  },
+  textoFiltroAtivo: {
+    color: '#111',
+  },
+  barraResultados: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  resumoResultados: {
+    flex: 1,
+  },
+  tituloResultados: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  descricaoResultados: {
+    color: '#999',
+    fontSize: 10,
+    marginTop: 5,
+  },
+  botaoOrdenar: {
+    minHeight: 38,
+    paddingHorizontal: 10,
+    borderRadius: 11,
+    backgroundColor: '#181818',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,106,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textoOrdenar: {
+    color: '#C9A86A',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  botaoAtualizar: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: '#181818',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,106,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconeAtualizar: {
+    color: '#C9A86A',
+    fontSize: 24,
+  },
+  cardUsuario: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(18,18,18,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,106,0.18)',
+    borderRadius: 17,
+    padding: 15,
+    marginBottom: 11,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(201,168,106,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,106,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iniciais: {
+    color: '#C9A86A',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  dadosUsuario: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  nomeUsuario: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  linhaTipo: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 7,
+  },
+  badge: {
+    borderRadius: 6,
+    backgroundColor: 'rgba(201,168,106,0.10)',
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+  textoBadge: {
+    color: '#C9A86A',
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  suaConta: {
+    color: '#888',
+    fontSize: 9,
+  },
+  email: {
+    color: '#aaa',
+    fontSize: 11,
+    marginTop: 7,
+  },
+  telefone: {
+    color: '#888',
+    fontSize: 11,
+    marginTop: 4,
+  },
+  seta: {
+    color: '#C9A86A',
+    fontSize: 30,
+    marginLeft: 10,
+  },
+  areaCentral: {
+    flex: 1,
+    paddingHorizontal: 22,
+    justifyContent: 'center',
+  },
+  estado: {
+    backgroundColor: 'rgba(18,18,18,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,168,106,0.18)',
+    borderRadius: 18,
+    padding: 25,
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  tituloEstado: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  textoEstado: {
+    color: '#aaa',
+    fontSize: 12,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 9,
+  },
+  botaoPrincipal: {
+    minHeight: 48,
+    width: '100%',
+    backgroundColor: '#C9A86A',
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 12,
+    marginTop: 18,
+  },
+  textoBotao: {
+    color: '#111',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
 });
