@@ -1,259 +1,28 @@
-import React from 'react';
-
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ImageBackground,
-  ScrollView,
-} from 'react-native';
-
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-const OPCOES = [
-  {
-  tela: 'CadastroAdm',
-  icone: '👥',
-  titulo: 'Consultar usuários',
-  descricao: 'Busque cadastros e gerencie os usuários do sistema.',
-},
-  {
-    tela: 'SolicitacoesAnuncio',
-    icone: '📢',
-    titulo: 'Solicitações de anúncios',
-    descricao: 'Confira os anúncios enviados para aprovação.',
-  },
-  {
-    tela: 'TerrenoConstrucaoAdm',
-    icone: '🏗️',
-    titulo: 'Terreno + Construção',
-    descricao: 'Acompanhe os pedidos de terrenos e construção.',
-  },
-  {
-    tela: 'AvaliacaoImovelAdm',
-    icone: '🏠',
-    titulo: 'Avaliação de imóveis',
-    descricao: 'Confira as solicitações de avaliação.',
-  },
-  {
-    tela: 'AgendaVisitasAdm',
-    icone: '📅',
-    titulo: 'Agenda de visitas',
-    descricao: 'Analise datas, horários e confirme as visitas.',
-  },
-  {
-    tela: 'AtendimentoAdm',
-    icone: '💬',
-    titulo: 'Fale com um corretor',
-    descricao: 'Responda às dúvidas e aos pedidos de contato.',
-  },
-  {
-    tela: 'Perfil',
-    icone: '👤',
-    titulo: 'Perfil',
-    descricao: 'Visualize e atualize os dados da sua conta.',
-  },
-];
+﻿import React, { useContext } from 'react';
+import { Text, View } from 'react-native';
+import { AuthContext } from '../contexts/AuthContext';
+import { Avatar, Badge, Card, ItemMenu, Pagina, s, TituloSecao } from '../Componentes/UI';
+import { equipe } from '../utils/domain';
 
 export default function InicialAdm({ navigation }) {
-  return (
-    <ImageBackground
-      source={require('../Imagens/InicialAdm.png')}
-      style={estilos.fundo}
-      resizeMode="cover"
-    >
-      <View style={estilos.sombra} />
-
-      <SafeAreaView style={estilos.areaSegura}>
-        <ScrollView
-          contentContainerStyle={estilos.conteudo}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={estilos.cabecalho}>
-            <Text style={estilos.logo}>
-              A2 <Text style={estilos.logoBranco}>IMÓVEIS</Text>
-            </Text>
-
-            <Text style={estilos.slogan}>
-              REALIZANDO SONHOS
-            </Text>
-
-            <View style={estilos.linha} />
-
-            <Text style={estilos.titulo}>
-              ADMINISTRADOR
-            </Text>
-          </View>
-
-          {OPCOES.map((opcao) => (
-            <TouchableOpacity
-              key={opcao.tela}
-              style={estilos.botao}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel={opcao.titulo}
-              onPress={() => navigation.navigate(opcao.tela)}
-            >
-              <View style={estilos.iconeContainer}>
-                <Text style={estilos.icone}>
-                  {opcao.icone}
-                </Text>
-              </View>
-
-              <View style={estilos.textoContainer}>
-                <Text style={estilos.tituloBotao}>
-                  {opcao.titulo}
-                </Text>
-
-                <Text style={estilos.descricao}>
-                  {opcao.descricao}
-                </Text>
-              </View>
-
-              <Text style={estilos.seta}>›</Text>
-            </TouchableOpacity>
-          ))}
-
-          <View style={estilos.rodape}>
-            <Text style={estilos.casaRodape}>⌂</Text>
-
-            <View style={estilos.linhaRodape} />
-
-            <Text style={estilos.textoRodape}>
-              GESTÃO • ORGANIZAÇÃO • RESULTADOS
-            </Text>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </ImageBackground>
-  );
+  const { user } = useContext(AuthContext);
+  const abrir = (tela) => () => navigation.navigate(tela);
+  const servicos = [
+    ['Terreno + Construção', 'TerrenoConstrucaoAdm', 'construct-outline', 'Projetos, estimativas e financiamento.'],
+    ['Avaliação de imóveis', 'AvaliacaoImovelAdm', 'home-outline', 'Solicitações e valores estimados.'],
+    ['Agenda de visitas', 'AgendaVisitasAdm', 'calendar-outline', 'Datas, horários e confirmações.'],
+    ['Atendimentos', 'AtendimentoAdm', 'chatbubble-ellipses-outline', 'Conversas e acompanhamento dos clientes.'],
+  ];
+  return <Pagina navigation={navigation} inicio titulo={user.tipo === 'corretor' ? 'Área do corretor' : 'Administração'} sobretitulo="PAINEL DA IMOBILIÁRIA">
+    <Card><View style={[s.linha, { alignItems: 'center', gap: 15 }]}><Avatar tamanho={48} /><View style={{ flex: 1 }}><Text style={s.menuDescricao}>Bem-vindo de volta,</Text><Text style={s.subtitulo}>{user.nome?.split(' ')[0] || 'equipe'}</Text><Badge texto={user.tipo === 'dono' ? 'Dono' : user.tipo === 'corretor' ? 'Corretor' : 'Administrador'} /></View></View></Card>
+    {equipe(user.tipo) && <><TituloSecao titulo="Gestão" descricao="Organize os cadastros e os anúncios." />
+      <ItemMenu titulo="Usuários e corretores" descricao="Consultar cadastros e gerenciar acessos." icone="people-outline" onPress={abrir('CadastroAdm')} />
+      <ItemMenu titulo="Gerenciar imóveis" descricao="Informações, anúncios e disponibilidade." icone="business-outline" onPress={abrir('GestaoImoveis')} />
+      <ItemMenu titulo="Solicitações de anúncios" descricao="Analisar os pedidos dos proprietários." icone="megaphone-outline" onPress={abrir('SolicitacoesAnuncio')} />
+    </>}
+    <TituloSecao titulo="Serviços e atendimentos" descricao={equipe(user.tipo) ? 'Acompanhe o trabalho da equipe.' : 'Confira os atendimentos atribuídos a você.'} />
+    {servicos.map(([titulo, tela, icone, descricao]) => <ItemMenu key={tela} titulo={titulo} descricao={descricao} icone={icone} onPress={abrir(tela)} />)}
+    <TituloSecao titulo="Negócios" /><ItemMenu destaque titulo="Propostas e negociações" descricao="Valores, contrapropostas e histórico." icone="documents-outline" onPress={abrir('Propostas')} />
+    <TituloSecao titulo="Minha conta" /><ItemMenu titulo="Consultar catálogo" icone="grid-outline" onPress={abrir('Imoveis')} /><ItemMenu titulo="Meu perfil" icone="person-outline" onPress={abrir('Perfil')} />
+  </Pagina>;
 }
-
-const estilos = StyleSheet.create({
-  fundo: {
-    flex: 1,
-    backgroundColor: '#111',
-  },
-  areaSegura: {
-    flex: 1,
-  },
-  sombra: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.42)',
-  },
-  conteudo: {
-    paddingHorizontal: 22,
-    paddingTop: 24,
-    paddingBottom: 45,
-    width: '100%',
-    maxWidth: 760,
-    alignSelf: 'center',
-  },
-  cabecalho: {
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  logo: {
-    color: '#C9A86A',
-    fontSize: 38,
-    fontWeight: '900',
-    letterSpacing: 3,
-  },
-  logoBranco: {
-    color: '#fff',
-    fontWeight: '500',
-  },
-  slogan: {
-    color: '#C9A86A',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 4,
-    marginTop: 5,
-  },
-  linha: {
-    width: 80,
-    height: 2,
-    backgroundColor: '#C9A86A',
-    marginTop: 22,
-    marginBottom: 16,
-  },
-  titulo: {
-    color: '#C9A86A',
-    fontSize: 25,
-    fontWeight: '700',
-    letterSpacing: 3,
-  },
-  botao: {
-    minHeight: 110,
-    backgroundColor: 'rgba(18,18,18,0.94)',
-    borderWidth: 1,
-    borderColor: '#C9A86A',
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginBottom: 14,
-    elevation: 5,
-    boxShadow: '0 8px 20px rgba(0,0,0,0.35)',
-  },
-  iconeContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: '#C9A86A',
-    backgroundColor: 'rgba(201,168,106,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  icone: {
-    fontSize: 28,
-  },
-  textoContainer: {
-    flex: 1,
-    marginLeft: 15,
-    paddingRight: 8,
-  },
-  tituloBotao: {
-    color: '#fff',
-    fontSize: 17,
-    lineHeight: 23,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  descricao: {
-    color: '#999',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  seta: {
-    color: '#C9A86A',
-    fontSize: 38,
-    fontWeight: '200',
-    marginLeft: 5,
-  },
-  rodape: {
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  casaRodape: {
-    color: '#C9A86A',
-    fontSize: 38,
-  },
-  linhaRodape: {
-    width: 180,
-    height: 1,
-    backgroundColor: '#C9A86A',
-    marginTop: 8,
-    marginBottom: 13,
-  },
-  textoRodape: {
-    color: '#C9A86A',
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 2,
-    textAlign: 'center',
-  },
-});

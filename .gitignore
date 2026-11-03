@@ -39,3 +39,10 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Artefatos locais de validação
+dist-*/
+.firebase-emulators/
+*-debug.log
+.firebase/
+.emulator-*.log

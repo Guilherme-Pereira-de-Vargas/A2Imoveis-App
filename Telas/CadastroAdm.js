@@ -1,3 +1,4 @@
+import Toque from '../Componentes/Toque';
 import React, {
   useContext,
   useEffect,
@@ -8,12 +9,10 @@ import React, {
 import {
   ActivityIndicator,
   FlatList,
-  ImageBackground,
   Keyboard,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 
@@ -29,6 +28,8 @@ import {
 
 import { auth, database } from '../firebaseConfig';
 import { AuthContext } from '../contexts/AuthContext';
+import { Cabecalho, Icone } from '../Componentes/UI';
+import FundoMarca from '../Componentes/FundoMarca';
 
 const TIPOS = {
   cliente: {
@@ -189,7 +190,7 @@ function Estado({
       )}
 
       {!!acao && (
-        <TouchableOpacity
+        <Toque
           style={s.botaoPrincipal}
           activeOpacity={0.85}
           accessibilityRole="button"
@@ -198,7 +199,7 @@ function Estado({
           <Text style={s.textoBotao}>
             {acao}
           </Text>
-        </TouchableOpacity>
+        </Toque>
       )}
     </View>
   );
@@ -371,6 +372,9 @@ export default function CadastroAdm({ navigation }) {
       <Text style={s.sobretitulo}>
         GESTÃO DE USUÁRIOS
       </Text>
+      <Toque accessibilityRole="button" style={s.botaoPrincipal} onPress={() => navigation.navigate('NovoUsuario')}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 }}><Icone nome="person-add-outline" cor="#111" tamanho={19} /><Text style={s.textoBotao}>Cadastrar usuário ou corretor</Text></View>
+      </Toque>
 
       <Text style={s.titulo}>
         Consultar usuários
@@ -421,7 +425,7 @@ export default function CadastroAdm({ navigation }) {
           />
 
           {!!busca && (
-            <TouchableOpacity
+            <Toque
               style={s.limparBusca}
               activeOpacity={0.8}
               accessibilityRole="button"
@@ -429,7 +433,7 @@ export default function CadastroAdm({ navigation }) {
               onPress={() => setBusca('')}
             >
               <Text style={s.iconeLimpar}>×</Text>
-            </TouchableOpacity>
+            </Toque>
           )}
         </View>
 
@@ -443,7 +447,7 @@ export default function CadastroAdm({ navigation }) {
 
         <View style={s.filtros}>
           {filtros.map((tipo) => (
-            <TouchableOpacity
+            <Toque
               key={tipo}
               activeOpacity={0.85}
               accessibilityRole="button"
@@ -480,7 +484,7 @@ export default function CadastroAdm({ navigation }) {
               >
                 {contagem[tipo]}
               </Text>
-            </TouchableOpacity>
+            </Toque>
           ))}
         </View>
       </View>
@@ -506,7 +510,7 @@ export default function CadastroAdm({ navigation }) {
           </Text>
         </View>
 
-        <TouchableOpacity
+        <Toque
           style={s.botaoOrdenar}
           activeOpacity={0.8}
           accessibilityRole="button"
@@ -520,9 +524,9 @@ export default function CadastroAdm({ navigation }) {
           <Text style={s.textoOrdenar}>
             Nome {ordem === 'az' ? 'A–Z' : 'Z–A'}
           </Text>
-        </TouchableOpacity>
+        </Toque>
 
-        <TouchableOpacity
+        <Toque
           style={s.botaoAtualizar}
           activeOpacity={0.8}
           accessibilityRole="button"
@@ -536,7 +540,7 @@ export default function CadastroAdm({ navigation }) {
           }
         >
           <Text style={s.iconeAtualizar}>↻</Text>
-        </TouchableOpacity>
+        </Toque>
       </View>
     </View>
   );
@@ -577,36 +581,10 @@ export default function CadastroAdm({ navigation }) {
   );
 
   return (
-    <ImageBackground
-      source={require('../Imagens/fundo-cadastro.png')}
-      style={s.fundo}
-    >
-      <View style={s.sombra} />
+    <FundoMarca style={s.fundo}>
 
       <SafeAreaView style={s.areaSegura}>
-        <View style={s.topo}>
-          <TouchableOpacity
-            style={s.botaoVoltar}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Voltar"
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={s.setaVoltar}>‹</Text>
-          </TouchableOpacity>
-
-          <View style={s.marca}>
-            <Text style={s.logo}>
-              A2 <Text style={s.logoBranco}>IMÓVEIS</Text>
-            </Text>
-
-            <Text style={s.slogan}>
-              REALIZANDO SONHOS
-            </Text>
-          </View>
-
-          <View style={s.espacoTopo} />
-        </View>
+        <Cabecalho navigation={navigation} />
 
         {verificando ? (
           <View style={s.areaCentral}>
@@ -652,7 +630,7 @@ export default function CadastroAdm({ navigation }) {
               const tipo = tipoUsuario(item);
 
               return (
-                <TouchableOpacity
+                <Toque
                   style={s.cardUsuario}
                   activeOpacity={0.8}
                   accessibilityRole="button"
@@ -709,13 +687,13 @@ export default function CadastroAdm({ navigation }) {
                   </View>
 
                   <Text style={s.seta}>›</Text>
-                </TouchableOpacity>
+                </Toque>
               );
             }}
           />
         )}
       </SafeAreaView>
-    </ImageBackground>
+    </FundoMarca>
   );
 }
 
